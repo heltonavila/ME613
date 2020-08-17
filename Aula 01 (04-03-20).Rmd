@@ -1,0 +1,55 @@
+---
+title: "Aula 01"
+author: "Helton"
+date: "4 de março de 2020"
+output: html_document
+---
+
+**Encontrando o centro via mínimos quadrados usando RStudio:**
+
+```{r}
+library(manipulate); library(ggplot2); library(UsingR); library(tidyverse)
+data(Galton)
+```
+
+```{r}
+myHist <- function(mu){
+  mse <- mean((Galton$child - mu)^2)
+  ggplot(Galton, aes(x=child)) +
+    geom_histogram(fill="salmon", colour="black", binwidth=1) + 
+    geom_vline(xintercept = mu, size = 3) +
+    ggtitle(paste("mu = ", mu, ", MSE = ", round(mse, 2), sep = "")) + 
+    theme_bw()
+}
+```
+
+A estimativa por mínimos quadrados é a média
+
+```{r}
+manipulate(myHist(mu), mu = slider(62, 74, step = 0.5))
+```
+
+**Regressão pela origem:**
+
+```{r}
+myPlot = function(beta){
+  tmp = Galton %>% mutate(parent=parent-mean(parent), child=child-mean(child))
+  mse = with(tmp, mean((child-(parent*beta))^2))
+  
+  ggplot(tmp, aes(parent, child)) + 
+    geom_hex() +
+    geom_abline(intercept = 0, slope=beta) +
+    ggtitle(paste("beta =", beta," \t MSE =", round(mse, 4))) +
+    theme_bw()
+}
+```
+
+```{r}
+manipulate(myPlot(beta), beta=slider(0.44, 0.84, step=0.02))
+```
+
+**Solução direta pelo R:**
+
+```{r}
+lm(I(child - mean(child))~ I(parent - mean(parent)) - 1, data = Galton)
+```
