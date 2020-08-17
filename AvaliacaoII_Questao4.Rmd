@@ -1,0 +1,266 @@
+---
+title: "Avaliação II (Parte Prática)"
+author: "Helton Ávila (174471)"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+## Bibliotecas
+library(tidyverse)
+library(corrplot)
+library(knitr)
+library(MASS)
+library(olsrr)
+library(car)
+```
+
+```{r, echo=FALSE,include=FALSE}
+alugueis <- read_csv("C:/Users/55199/Downloads/alugueis.csv")
+glimpse(alugueis)
+```
+
+```{r, echo=FALSE,error=FALSE,warning=FALSE}
+## Transformações das variáveis
+
+alugueis = alugueis %>% 
+  
+  mutate(andar = replace(andar, andar == '-', 0)) %>% ## Transformando variável andar
+  
+  mutate(animal = replace(animal, animal == 'n', 0)) %>% ## Transformando variável animal
+  mutate(animal = replace(animal, animal == 's', 1)) %>%
+
+  mutate(mobilia = replace(mobilia, mobilia == 'n', 0)) %>% ## Transformando variável mobilia
+  mutate(mobilia = replace(mobilia, mobilia == 's', 1)) %>%
+  
+  ## Excluindo algumas observações (método DFFITS)
+  filter(condominio != '1117000' & condominio != '81150' & condominio != '32000' &
+           area != '24606' & area != '12732') %>% 
+
+  as.data.frame()
+```
+
+
+```{r, echo=FALSE}
+## Separar andares em grupos
+
+bloco1 = c(as.numeric(0:4))   ## Bloco 1 (0:4)
+bloco2 = c(as.numeric(5:9))   ## Bloco 2 (5:9)
+bloco3 = c(as.numeric(10:14)) ## Bloco 3 (10:14)
+bloco4 = c(as.numeric(15:19)) ## Bloco 4 (15:19)
+bloco5 = c(as.numeric(20:24)) ## Bloco 5 (20:24)
+bloco6 = c(as.numeric(25:29)) ## Bloco 6 (25:29)
+
+alugueis2 = alugueis %>% 
+  mutate(andar = plyr::mapvalues(andar, from = c(bloco1, bloco2, bloco3, bloco4, bloco5, bloco6),
+  to = c(rep('bloco1', length(bloco1)), rep('bloco2', length(bloco2)), rep('bloco3', length(bloco3)),
+         rep('bloco4', length(bloco4)), rep('bloco5', length(bloco5)), rep('bloco6', length(bloco6))
+         ))) %>%
+    as.data.frame()
+```
+
+
+**1. Análise descritiva**
+
+Iniciei a questão analisando descritivamente meu banco de dados para estudar a distribuição das variáveis. Na Figura 1 indico o histograma dos preços de aluguel, que apresenta uma distribuição assimétrica com cauda pesada à direita. É possível notar a presença de alguns *outliers* cujos preços são muito elevados. 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=2.5, fig.cap= "Histograma dos preços de aluguel (média em destaque)"}
+## Histograma dos preços de aluguel
+alugueis %>%
+  ggplot(aes(x = aluguel)) + 
+  geom_histogram(aes(y = ..density..), colour = "black", fill = "white") + 
+  geom_density(alpha = 0.75, fill = "#FF9999") +
+  ggtitle("Histograma dos preços de aluguel") +
+  geom_vline(xintercept = mean(alugueis$aluguel), color = "royalblue", lwd=1) +
+  labs(x = "Aluguel", y = "Densidade") +  
+  theme_bw()
+```
+
+```{r, echo=FALSE, fig.height=2.5, fig.cap= "Boxplots dos preços de aluguel por cidade listada"}
+## Boxplots dos preços de aluguel por cidade listada
+alugueis %>%
+  ggplot(aes(x = reorder(cidade, aluguel), y = aluguel, fill = cidade)) +
+  geom_boxplot() + 
+  ggtitle("Boxplots dos preços de aluguel por cidade") +
+  labs(x = "Cidade", y = "Aluguel") +  
+  theme_bw() + 
+  theme(legend.position = "none") 
+```
+
+Decidi estudar o comportamento dos alugueis distribuído pelas cidades do banco de dados, coforme indica a Figura 2. Porto Alegre apresenta a menor mediana nos preços de alugueis, porém com muitos *outliers*; em contrapartida, São Paulo demonstra ter os imóveis com maior preço de aluguel, contendo o maior valor de locação do banco do dados.
+
+```{r, echo=FALSE, fig.height=3, fig.cap= "Gráfico de dispersão do aluguel mediante área do imóvel (em log)"}
+## Histograma dos preços de aluguel por área
+## Inclui possíveis outliers (observações iguais a '24606' e '12732')
+## Aplicação de transformação log
+
+alugueis %>%
+  ggplot(aes(x = log(area), y = aluguel)) + 
+  geom_point(alpha = 0.2) + 
+  stat_smooth(method = "lm", formula = y~x, size = 1) + 
+  ggtitle("Aluguel mediante área do imóvel") +
+  labs(x = "Área (em log)", y = "Aluguel") +  
+  theme_bw()
+```
+
+Ao analisar o preço do aluguel mediante a área do imóvel me deparei com dois possíveis *outliers* no banco de dados, cujo espaço ofertado não era condizente com o valor do mercado. No entanto optei em manter essas observações na análise, e apliquei a transformação logarítmica para estudar esse comportamento conforme exibe a Figura 3. Dessa maneira, o comportamento da relação entre essas duas variáveis demonstra clara linearidade.
+
+Estudando a relação das variáveis do banco entre si, fica visível que a variável *aluguel* tem uma correlação alta com as variáveis *quartos*, *wcs*, *vagas* e *iptu*, conforme indica a Figura 4.
+
+```{r, echo=FALSE, fig.height=2.5, fig.cap= "Gráfico de correlação entre as variáveis"}
+## Matriz de correlação das variáveis numéricas
+#knitr::kable(cor(alugueis[,c(2:5,9:11)]))
+
+corrplot(cor(alugueis[,c(2:5,9:11)]), method = "shade")
+```
+
+Entretanto, é válido notar que essas variáveis também demonstam ter correlação alta entre si, levantando a hipótese de existência de multicolinearidade e a possibilidade de *overfitting* no modelo de regressão linear múltiplo. Essa hipótese será abordada mais adiante.
+
+
+**2. Modelo de Regressão Linear Múltipla**
+
+
+```{r, echo=FALSE} 
+## Modelo de regressão por stepwise
+full.model <- lm(aluguel ~., data = alugueis)
+step.model <- stepAIC(full.model, direction = "both", trace = FALSE)
+``` 
+
+Adotei um procedimento de *stepwise* para escolha do meu modelo. Nele obtive que as variáveis do banco de dados que forneceriam boa performance ao modelo seriam *cidade*, *quartos*, *wcs*, *vagas*, *andar*, *mobilia*, *condominio* e *iptu*. Sob a hipótese de que o valor do condomínio esteja relacionado ao valor do IPTU, conforme indica a Figura 4, optei por criar uma interação entre elas. Como alguns andares (de 0 a 29) possuem poucas bservações, optei em agrupá-los em seis grupos de 5 andares cada. Por fim, após a execução de alguns outros modelos optei pela aplicação da transformação logarítmica da variável *aluguel*, visto que havia obtido resultados negativos dos coeficientes que não condiziam com a realidade do objeto em estudo. 
+
+```{r, echo=FALSE} 
+## Deixando São Paulo como referência
+alugueis2$cidade <- factor(alugueis2$cidade, levels = c("São Paulo", "Porto Alegre", "Rio de Janeiro", "Belo Horizonte", "Campinas"))
+
+modelo <- lm(formula = log(aluguel) ~ cidade + area + quartos + wcs + vagas + andar + mobilia + condominio*iptu, data = alugueis2)
+summary(modelo)
+```
+
+Na regressão linear múltipla o *R-squared* representa o coeficiente de correlação entre os valores observados da variável de resultado e os valores ajustados. No entanto, ele aumenta conforme mais variáveis são adicionadas ao modelo, e uma solução é ajustá-lo considerando o número de variáveis preditoras. O *R-squared* do modelo resultou em 0.656, e o *Adjusted R-squared* em 0.6548.
+
+A Figura 5 exibe os gráficos de resíduos do modelo. O gráfico de *Residuals vs Fitted* não está centrado em média 0. O ideal é que os pontos formem uma nuvem aleatória, mas a linha vermelha que ultrapassa o gráfico horizontalmente indica a existência da presença de mais pontos negativos, com pontos concentrados no canto esquerdo ao invés de estarem dispersados por todo eixo horizontal. Dessa forma não temos indícios de que a variância dos resíduos seja homoscedástica. Por sua vez, no gráfico *Normal Q-Q* existem pontos fora da reta traçada diagonalmente, com caudas pesadas na distribuição, no entanto os dados seguem aparentemente uma distribuição normal.
+
+```{r, echo=FALSE, fig.height=4.1, message=FALSE, warning=FALSE, fig.cap= "Gráficos dos resíduos do modelo"}
+par(mfrow=c(2,2))
+plot(modelo)
+```
+
+Aqui ressalto que empreguei a utilização do método *DFFITS* para identificar alguns pontos influentes e remôve-los do meu banco de dados como forma de aprimorar o meu modelo de regressão. Um total de 5 observações aberrantes foram removidas.
+
+```{r, echo=FALSE, eval=FALSE}
+ols_plot_cooksd_chart(modelo)
+ols_plot_dffits(modelo)
+```
+
+
+**2.1. Multicolinearidade**
+
+Para analisar se o modelo possui multicolinearidade entre as variáveis é preciso verificar o fator de inflação da variação *(VIF)*, calculando a razão entre a variação do modelo e a variação da variável individual por si só. Conforme exibe a Tabela 1, que apresenta os valores dos VIFs das variáveis do modelo, podemos concluir que este não está sendo impactado sob efeito de multicolinearidade.
+
+```{r, echo=FALSE}
+knitr::kable(vif(modelo), digits = 2, caption = "Fator de VIF para teste de multicolinearidade")
+```
+
+\newpage
+
+**3. Questões**
+
+
+*a)* O modelo escolhido tem sua resposta em escala logarítmica, e para interpretá-lo precisamos aplicar a transfrmação exponencial. Dessa forma, obtém-se por este modelo que a média de alugueis em São Paulo é R\$ `r round(exp(7.000524),2)`, enquanto a de Campinas é R\$ `r round(exp(7.000524+-0.3910232),2)`. Portanto, podemos concluir que os alugueis em Campinas são cerca de `r round(exp(7.000524+-0.3910232)*100/exp(7.000524),2)` % os de São Paulo. Em contrapartida, o aluguel médio em Belo Horizonte é R\$ `r round(exp(7.000524+-0.260744109301),2)`, e aliado ao fato de seu p-valor ser significativo nesse modelo, podemos afirmar que seus alugueis não são tão caros quantos os de São Paulo.
+
+
+*b)* O banco de dados possui imóveis como casas (andar 0) e apartamentos (andares 1 ao 29). A distribuição dessa variável pelo valor de aluguel é exibido na Figura 6, mediante agrupamento em blocos de 5 andares cada. É possível notar um comportamento de aumento no aluguel médio mediante ascensão do bloco de andares, deixando clara a relação de que quanto maior o andar, maior o valor médio do aluguel dos imóveis. 
+
+```{r, echo=FALSE, fig.height=3, fig.cap= "Boxplot do aluguel mediante andar do imóvel", eval=FALSE}
+dist_andar = ggplot(data = alugueis, aes(x = andar, y = aluguel, fill = andar)) +
+  geom_boxplot() + 
+  labs(x = "Andar do imóvel", y = "Aluguel") +  
+  ggtitle("Aluguel mediante andar do imóvel") +
+  theme_bw() + 
+  theme(legend.position = "none")
+
+dist_andar + scale_x_discrete(limits = as.character(0:29))
+
+## Aumento na mediana do preço de locação conforme o aumento do andar dos apartamentos. Torna-se válido ressaltar a grande quantidade de *outliers* contida no banco de dados.
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## Dataframe com os parâmetros dos blocos
+blocos_precos = data_frame(
+  Blocos = c("Bloco 1", "Bloco 2", "Bloco 3", "Bloco 4", "Bloco 5", "BLoco 6"),
+  Aluguel = c(round(exp(7.000524334264),2),
+            (round(exp(7.000524334264 + 0.047304822765),2)), 
+            (round(exp(7.000524334264 + 0.095333372952),2)),
+            (round(exp(7.000524334264 + 0.154289742847),2)),
+            (round(exp(7.000524334264 + 0.179068648802),2)),
+            (round(exp(7.000524334264 + 0.442466465663),2)))
+  )
+```
+
+```{r, echo=FALSE, fig.height=2.6, fig.cap="Aluguel médio em blocos de andares", message=FALSE, warning=FALSE}
+ggplot(data = blocos_precos) + 
+  geom_point(aes(x = Blocos, y = Aluguel)) +
+  ggtitle("Preço médio do aluguel de imóveis em blocos de andares") + 
+  labs(x="Blocos de andares", y="Aluguel") + 
+  theme_bw()
+```
+
+Segundo o modelo de regressão escolhido, os apartamentos pertencentes ao bloco 2 (andares 5 a 9) adicionam ao aluguel um valor de R\$ `r round(exp(7.000524334264 + 0.047304822765) - exp(7.000524334264),2)`, enquanto os do bloco 3 (andares 10 a 14) acrescentam R\$ `r round(exp(7.000524334264 + 0.095333372952) - exp(7.000524334264),2)`. Os blocos 4 (andares 15 a 19) e 5 (andares 20 a 24) somam R\$ `r round(exp(7.000524334264 + 0.154289742847) - exp(7.000524334264),2)` e R\$ `r round(exp(7.000524334264 + 0.179068648802) - exp(7.000524334264),2)`, respectivamente. Por fim, o bloco 6, composto pelos andares 25 a 29, acrescenta R\$ `r round(exp(7.000524334264 + 0.442466465663) - exp(7.000524334264),2)` no valor médio do aluguel. 
+
+*c)* Os imóveis que podem ser considerados uma *pechincha* ou com o valor de aluguel *excessivamente alto* serão aqueles com maior e menor valores em cada cidade. Dessa forma, os imóveis que tem essa característica em cada cidade possuem os seguintes preços:
+
+```{r, echo=FALSE, include=FALSE}
+alugueis2$predito = predict(modelo, alugueis2)
+```
+
+```{r, include=FALSE}
+sp = subset(alugueis2, alugueis2$cidade=="São Paulo")
+cps = subset(alugueis2, alugueis2$cidade=="Campinas")
+bh = subset(alugueis2, alugueis2$cidade=="Belo Horizonte")
+rj = subset(alugueis2, alugueis2$cidade=="Rio de Janeiro")
+poa = subset(alugueis2, alugueis2$cidade=="Porto Alegre")
+
+mincps = round(exp(min(cps$predito)),2)
+minsp = round(exp(min(sp$predito)),2)
+minbh = round(exp(min(bh$predito)),2)
+minrj = round(exp(min(rj$predito)),2)
+minpoa = round(exp(min(poa$predito)),2)
+
+maxcps = round(exp(max(cps$predito)),2)
+maxsp = round(exp(max(sp$predito)),2)
+maxbh = round(exp(max(bh$predito)),2)
+maxrj = round(exp(max(rj$predito)),2)
+maxpoa = round(exp(max(poa$predito)),2)
+```
+
+**Campinas:**
+
+Mínimo: R\$950.73; máximo: R\$18786.40.
+
+**São Paulo:**
+
+Mínimo: R\$1372.89; máximo: R\$64134.69.
+
+**Belo Horizonte:**
+
+Mínimo: R\$1073.9; máximo: R\$24938.14.
+
+**Rio de Janeiro:**
+
+Mínimo: R\$1246.57; máximo: R\$24939.32.
+
+**Porto Alegre:**
+
+Mínimo: R\$1059.61; máximo: R\$14600.34.
+
+
+```{r, echo=FALSE}
+#*d. Se você ajustou o seu modelo final utilizando modelo = lm(Y ~ X, data=aluguel), então grave o objeto modelo e envie o arquivo resultante como parte da solução. Dica (assumindo que o meu RA seja 123456: saveRDS(modelo, file="mod123456.rds").*
+
+#RA: 174471
+saveRDS(modelo, file="mod174471.rds")
+```
+
