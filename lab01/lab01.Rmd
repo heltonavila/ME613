@@ -1,0 +1,143 @@
+---
+title: "Atividade 1"
+author: "Helton Ávila"
+date: "18/03/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message = FALSE, warning = FALSE}
+#Carregando o pacote
+library(UsingR)
+library(tidyverse)
+
+#Visualizando o banco de dados
+
+head(Galton)
+str(Galton)
+```
+
+3 - Selecione, aleatoriamente, 10 observações do conjunto de dados Galton, disponibilizado pelo pacote UsingR. Para a seleção das observações, utilize o comando set.seed(<RA>) (onde <RA> deve ser substituído pelo seu RA em modo numérico). 
+
+a) Com estas 10 observações, calcule manualmente (usando uma calculadora simples) os estimadores de β0 e β1 e suas variâncias;
+
+```{r}
+#Selecionando 10 v.a
+
+set.seed(174471)
+sorteio <- c(1:length(Galton[,"parent"]))
+amostra <- sample(sorteio,10,replace = F)
+Dados_amostrados <- Galton[amostra,]
+corr = cor(Dados_amostrados[,1], Dados_amostrados[,2])
+
+```
+
+b) Utilize o software R para calcular estas informações utilizando o comando lm() com o mesmo subconjunto de dados (com 10 observações).
+
+```{r}
+fit <- lm(Dados_amostrados[,2]~ Dados_amostrados[,1])
+summary(fit)
+
+```
+
+c) Centralize cada uma das variáveis em suas respectivas médias, realize uma regressão simples sem o intercepto. Compare o resultado com aquele obtido em b);
+
+```{r}
+#Centralizando a variável na média
+
+media_parent<- mean(Dados_amostrados[,"parent"])
+media_child <- mean(Dados_amostrados[,"child"])
+Dados_amostrados[,"parent"] <- Dados_amostrados[,"parent"] - media_parent
+Dados_amostrados[,"child"] <- Dados_amostrados[,"child"] - media_child
+
+#Realizando a regressão 
+
+fit1 <- lm (Dados_amostrados[,"child"]~ Dados_amostrados[,"parent"] -1)
+summary(fit1)
+
+```
+
+d) Que transformação você precisa realizar nos dados de forma que o coeficiente angular estimado seja exatamente o coeficiente de correlação? Escreva código em R para isso.
+
+```{r}
+#Transformação para a correlação
+
+Dados_amostrados_cor <- Dados_amostrados
+Dados_amostrados_cor[,2] <- Dados_amostrados[,2]/(sd(Dados_amostrados[,2]))
+Dados_amostrados_cor[,1] <- Dados_amostrados[,1]/(sd(Dados_amostrados[,1]))
+fit2 <- lm(Dados_amostrados_cor[,2]~Dados_amostrados_cor[,1])
+summary(fit2)
+
+```
+
+e) Se a altura (combinada) dos pais for 71 polegadas, qual é a estimativa da altura do filho?
+
+
+```{r}
+ y_chapeu0 =  coef(fit)[1]+coef(fit)[2]*71
+   y_chapeu0
+```
+
+4-b) Apresente funções (criada pelo aluno) para a determinação dos estimadores de β0 e β1 a partir das observações disponibilizadas em UsingR::Galton;
+
+```{r}
+#Criando uma função para estimar os parâmetros
+
+estimar_reg = function(x,y){
+  y_barra = mean(y)
+  x_barra = mean(x)
+  beta1 = sum((y-y_barra)*(x-x_barra))/ sum((x-x_barra)^2)
+  beta0 = y_barra - beta1*x_barra
+  
+  return(c(beta0,beta1))
+}
+```
+
+c) Ajuste o modelo de regressão linear simples utilizando a função lm();
+
+
+```{r}
+fit_Galton <- lm(Galton[,"child"]~Galton[,"parent"])
+summary(fit_Galton)
+```
+
+d) Compare os resultados da função lm() com aqueles obtidos pelas funções criadas pelo aluno;
+
+```{r}
+# Comparando a função criada com a função "lm":
+
+estimar_reg(Galton[,"parent"],Galton[,"child"])
+```
+
+
+e) Apresente um gráfico de dispersão (utilizando o pacote ggplot2) dos dados em questão juntamente com a reta de regressão ajustada (sem utilizar a função geom_smooth);
+
+
+```{r}
+#Gráfico de dispersão
+
+ggplot(data = Galton,aes(x = Galton[,2], y = Galton[,1])) +
+  geom_point() + geom_abline(intercept =  23.9415, slope = 0.6463, col = "red") + 
+  theme_bw()
+
+ggplot(data = Galton,aes(x = Galton[,2], y = Galton[,1])) +
+  geom_point() + geom_smooth(method = lm) + theme_bw()#usando a função smooth
+```
+
+f) Se a altura (combinada) dos pais for 71 polegadas, qual é a estimativa da altura do filho? Este resultado difere do da questão anterior? Por quê?
+
+```{r}
+y_chapeu1 =  coef(fit_Galton)[1]+coef(fit_Galton)[2]*71
+y_chapeu1
+y_chapeu0
+```
+
+  Comparando o resultado com o obtido no item 3, notamos que os valores apresentam uma diferença absoluta de  1.71667. Ressalta-se ainda que o resultado obtido no item 4 apresenta uma melhor estimativa, uma vez que seus parametros foram construidos incorporando mais dados.
+
+g) Descreva, para o público leigo, os resultados obtidos.
+
+  Com as analises feitas até o momento e tomando o moedelo que incorpora todos os dados ( fiy_Galton),podemos dizer que ao aumentar 1 polegada na média das alturas dos pais, a altura do filho aumenta em 0.646.
+
